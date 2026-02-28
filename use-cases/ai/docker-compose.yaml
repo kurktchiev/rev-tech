@@ -1,0 +1,51 @@
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "ollama pull qwen2.5:7b"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  chainlit-frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: chainlit-frontend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_URL=http://ollama:11434/v1/chat/completions
+      - MODEL=qwen2.5:7b
+      - CHAINLIT_AUTH_SECRET=36cc7f4c955b9fca311ba993d4792f10f6011e702ae8636be4a77edf0175e4bc
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      # Optional: mount local source for live reload during development.
+      # Remove or comment out for production builds.
+      - .:/app
+
+volumes:
+  ollama_data:

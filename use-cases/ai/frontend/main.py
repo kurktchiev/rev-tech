@@ -4,9 +4,11 @@ from typing import Optional, Dict
 import chainlit as cl
 import httpx
 from mcp import ClientSession
+from os import environ
 
-OLLAMA_URL = "http://localhost:11434/v1/chat/completions"
-MODEL = "qwen2.5:7b"
+
+OLLAMA_URL = environ.get("OLLAMA_URL", "http://localhost:11434/v1/chat/completions")
+MODEL = environ.get("MODEL", "qwen2.5:7b")
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. "
