@@ -5,7 +5,7 @@ services:
     container_name: ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -18,8 +18,7 @@ services:
     image: ollama/ollama:latest
     container_name: ollama-pull
     entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "ollama pull qwen2.5:7b"
+    command: "ollama pull ${OLLAMA_MODEL:-qwen2.5:7b}"
     environment:
       - OLLAMA_HOST=http://ollama:11434
     depends_on:
@@ -34,17 +33,16 @@ services:
     container_name: chainlit-frontend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${CHAINLIT_PORT:-8000}:8000"
     environment:
       - OLLAMA_URL=http://ollama:11434/v1/chat/completions
-      - MODEL=qwen2.5:7b
-      - CHAINLIT_AUTH_SECRET=36cc7f4c955b9fca311ba993d4792f10f6011e702ae8636be4a77edf0175e4bc
+      - MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      # RUN (openssl rand -hex 32) for a secret      
+      - CHAINLIT_AUTH_SECRET=${CHAINLIT_AUTH_SECRET}
     depends_on:
       ollama:
         condition: service_healthy
     volumes:
-      # Optional: mount local source for live reload during development.
-      # Remove or comment out for production builds.
       - .:/app
 
 volumes:
