@@ -5,7 +5,7 @@ services:
     container_name: ollama
     restart: unless-stopped
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "${OLLAMA_PORT}:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -18,9 +18,11 @@ services:
     image: ollama/ollama:latest
     container_name: ollama-pull
     entrypoint: ["/bin/sh", "-c"]
-    command: "ollama pull ${OLLAMA_MODEL:-qwen2.5:7b}"
+    command: > 
+      "ollama pull ${OLLAMA_MODEL}"
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${OLLAMA_BASE_URL}
+      - CI=true
     depends_on:
       ollama:
         condition: service_healthy
@@ -33,17 +35,18 @@ services:
     container_name: chainlit-frontend
     restart: unless-stopped
     ports:
-      - "${CHAINLIT_PORT:-8000}:8000"
+      - "${CHAINLIT_PORT}:8000"
     environment:
-      - OLLAMA_URL=http://ollama:11434/v1/chat/completions
-      - MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - OLLAMA_CHAT_COMPLETION_URL=${OLLAMA_CHAT_COMPLETION_URL}
+      - MODEL=${OLLAMA_MODEL}
       # RUN (openssl rand -hex 32) for a secret      
       - CHAINLIT_AUTH_SECRET=${CHAINLIT_AUTH_SECRET}
     depends_on:
       ollama:
         condition: service_healthy
     volumes:
-      - .:/app
+      - ./frontend/public:/app/public
+      - ./frontend/main.py:/app/frontend/main.py
 
 volumes:
   ollama_data:
