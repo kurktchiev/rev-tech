@@ -45,6 +45,7 @@ services:
       ollama:
         condition: service_healthy
     volumes:
+      - ./frontend//.chainlit:/app/.chainlit
       - ./frontend/public:/app/public
       - ./frontend/main.py:/app/frontend/main.py
 
