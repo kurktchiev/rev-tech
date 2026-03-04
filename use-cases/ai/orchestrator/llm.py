@@ -10,7 +10,7 @@ def get_llm():
     Return an LLM instance based on LLM_PROVIDER env var.
     Used everywhere — no hardcoded model references in the codebase.
     """
-    provider = os.environ.get("LLM_PROVIDER", "anthropic")
+    provider = os.environ.get("ORCHESTRATOR_LLM_PROVIDER", "anthropic")
     if provider == "ollama":
         return ChatOllama(
             model=os.environ.get("OLLAMA_MODEL", "llama3.2"),

@@ -5,8 +5,8 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 
-def get_llm():
-    provider = os.environ.get("LLM_PROVIDER", "anthropic")
+def get_llm(provider_env="LLM_PROVIDER"):
+    provider = os.environ.get(provider_env, "anthropic")
     if provider == "ollama":
         return ChatOllama(
             model=os.environ.get("OLLAMA_MODEL", "llama3.2"),

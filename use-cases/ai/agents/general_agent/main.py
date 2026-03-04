@@ -27,6 +27,6 @@ def load_card() -> AgentCard:
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("AGENT_PORT", 9003))
+    port = int(os.environ.get("GENERAL_AGENT_PORT", 9003))
     agent = BaseA2AAgent(graph=build_graph(), card=load_card())
     agent.run(port=port)

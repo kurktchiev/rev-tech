@@ -4,7 +4,6 @@ import os
 import re
 import shutil
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -39,9 +38,9 @@ from orchestrator.tool_builder import build_tool_from_card
 logger = structlog.get_logger()
 
 PORT = int(os.environ.get("ORCHESTRATOR_PORT", 9000))
-CONFIG_PATH = Path(os.environ.get("AGENTS_CONFIG", "orchestrator/agents.json"))
+CONFIG_PATH = Path(os.environ.get("ORCHESTRATOR_AGENTS_CONFIG", "orchestrator/agents.json"))
 TSH_DISCOVERY_QUERY = os.environ.get(
-    "TSH_DISCOVERY_QUERY",
+    "ORCHESTRATOR_TSH_DISCOVERY_QUERY",
     'labels["app-type"] == "specialist" && labels["demo"] == "ai-agents"',
 )
 
@@ -226,10 +225,6 @@ class OrchestratorExecutor(AgentExecutor):
 
 class ReloadRequest(BaseModel):
     reason: str
-    agentName: str
-    eventType: str
-    labels: dict
-    timestamp: datetime
 
 
 async def do_reload(request: ReloadRequest) -> None:
@@ -237,7 +232,7 @@ async def do_reload(request: ReloadRequest) -> None:
         new_tools = await load_tools()
         _state["tools"] = new_tools
         _state["graph"] = build_orchestrator(new_tools)
-        logger.info("reload complete", tool_count=len(new_tools), trigger=request.agentName)
+        logger.info("reload complete", tool_count=len(new_tools), reason=request.reason)
     except Exception as e:
         logger.error("reload failed", error=str(e))
 
@@ -245,9 +240,9 @@ async def do_reload(request: ReloadRequest) -> None:
 async def reload_endpoint(request: Request) -> JSONResponse:
     data = await request.json()
     req = ReloadRequest(**data)
-    logger.info("reload triggered", agent=req.agentName, event=req.eventType)
+    logger.info("reload triggered", reason=req.reason)
     return JSONResponse(
-        {"status": "accepted", "agent": req.agentName},
+        {"status": "accepted", "reason": req.reason},
         status_code=202,
         background=BackgroundTask(do_reload, req),
     )
