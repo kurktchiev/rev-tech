@@ -11,5 +11,5 @@
 members = [
     "frontend",
     "agents",
-    # "orchestrator",  # TODO: add when orchestrator is promoted from untracked
+    "orchestrator",
 ]
