@@ -10,7 +10,8 @@ WORKDIR /app
 
 # Copy shared package files and general_agent code
 COPY pyproject.toml ./
-COPY __init__.py base_agent.py llm.py ./agents/
+COPY __init__.py ./agents/
+COPY base_agent/ ./agents/base_agent/
 COPY general_agent/ ./agents/general_agent/
 
 # Install dependencies

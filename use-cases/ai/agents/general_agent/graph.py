@@ -1,6 +1,6 @@
 from langgraph.graph import END, StateGraph, MessagesState
 
-from agents.llm import get_llm
+from agents.base_agent import get_llm
 
 
 def build_graph():
