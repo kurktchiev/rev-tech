@@ -19,7 +19,7 @@ services:
     container_name: ollama-pull
     entrypoint: ["/bin/sh", "-c"]
     command: > 
-      "ollama pull ${OLLAMA_MODEL}"
+      "ollama pull ${CHAINLIT_CHAT_MODEL}"
     environment:
       - OLLAMA_HOST=${OLLAMA_BASE_URL}
       - CI=true
@@ -37,8 +37,8 @@ services:
     ports:
       - "${CHAINLIT_PORT}:8000"
     environment:
-      - OLLAMA_CHAT_COMPLETION_URL=${OLLAMA_CHAT_COMPLETION_URL}
-      - MODEL=${OLLAMA_MODEL}
+      - CHAINLIT_CHAT_COMPLETION_URL=${CHAINLIT_CHAT_COMPLETION_URL}
+      - CHAINLIT_CHAT_MODEL=${CHAINLIT_CHAT_MODEL}
     depends_on:
       ollama:
         condition: service_healthy
