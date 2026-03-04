@@ -4,9 +4,11 @@ from typing import Optional, Dict
 import chainlit as cl
 import httpx
 from mcp import ClientSession
+from os import environ
 
-OLLAMA_URL = "http://localhost:11434/v1/chat/completions"
-MODEL = "qwen2.5:7b"
+
+CHAT_COMPLETION_URL = environ.get("CHAINLIT_CHAT_COMPLETION_URL")
+CHAT_MODEL = environ.get("CHAINLIT_CHAT_MODEL")
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. "
@@ -151,7 +153,7 @@ async def main(message: cl.Message):
             tool_called = False
 
             payload = {
-                "model": MODEL,
+                "model": CHAT_MODEL,
                 "messages": messages,
                 "stream": True,
             }
@@ -161,7 +163,7 @@ async def main(message: cl.Message):
                 payload["tool_choice"] = "auto"
 
             response = await client.post(
-                OLLAMA_URL,
+                CHAT_COMPLETION_URL,
                 json=payload,
                 headers={"Content-Type": "application/json"},
             )

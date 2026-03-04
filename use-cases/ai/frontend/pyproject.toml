@@ -1,5 +1,5 @@
 [project]
-name = "teleport-gpt"
+name = "frontend"
 version = "0.1.0"
 description = "Teleport Chat Interface"
 readme = "README.md"

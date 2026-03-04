@@ -4,7 +4,7 @@ requires-python = ">=3.13"
 
 [manifest]
 members = [
-    "teleport-gpt",
+    "frontend",
 ]
 
 [[package]]
@@ -536,6 +536,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bb/29/745f7d30d47fe0f251d3ad3dc2978a23141917661998763bebb6da007eb1/filetype-1.2.0.tar.gz", hash = "sha256:66b56cd6474bf41d8c54660347d37afcc3f7d1970648de365c102ef77548aadb", size = 998020, upload-time = "2022-11-02T17:34:04.141Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/18/79/1b8fa1bb3568781e84c9200f951c735f3f157429f44be0495da55894d620/filetype-1.2.0-py2.py3-none-any.whl", hash = "sha256:7ce71b6880181241cf7ac8697a2f1eb6a8bd9b429f7ad6d27b8db9ba5f1c2d25", size = 19970, upload-time = "2022-11-02T17:34:01.425Z" },
+]
+
+[[package]]
+name = "frontend"
+version = "0.1.0"
+source = { virtual = "frontend" }
+dependencies = [
+    { name = "chainlit" },
+    { name = "langchain-ollama" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "chainlit", specifier = ">=2.9.3" },
+    { name = "langchain-ollama", specifier = ">=1.0.1" },
 ]
 
 [[package]]
@@ -2406,21 +2421,6 @@ name = "syncer"
 version = "2.0.3"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8d/dd/d4dd75843692690d81f0a4b929212a1614b25d4896aa7c72f4c3546c7e3d/syncer-2.0.3.tar.gz", hash = "sha256:4340eb54b54368724a78c5c0763824470201804fe9180129daf3635cb500550f", size = 11512, upload-time = "2023-05-08T07:50:17.963Z" }
-
-[[package]]
-name = "teleport-gpt"
-version = "0.1.0"
-source = { virtual = "frontend" }
-dependencies = [
-    { name = "chainlit" },
-    { name = "langchain-ollama" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "chainlit", specifier = ">=2.9.3" },
-    { name = "langchain-ollama", specifier = ">=1.0.1" },
-]
 
 [[package]]
 name = "tenacity"

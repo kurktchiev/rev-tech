@@ -1,0 +1,51 @@
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    entrypoint: ["/bin/sh", "-c"]
+    command: > 
+      "ollama pull ${CHAINLIT_CHAT_MODEL}"
+    environment:
+      - OLLAMA_HOST=${OLLAMA_BASE_URL}
+      - CI=true
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  chainlit-frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: chainlit-frontend
+    restart: unless-stopped
+    ports:
+      - "${CHAINLIT_PORT}:8000"
+    environment:
+      - CHAINLIT_CHAT_COMPLETION_URL=${CHAINLIT_CHAT_COMPLETION_URL}
+      - CHAINLIT_CHAT_MODEL=${CHAINLIT_CHAT_MODEL}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./frontend//.chainlit:/app/.chainlit
+      - ./frontend/public:/app/public
+      - ./frontend/main.py:/app/frontend/main.py
+
+volumes:
+  ollama_data:
