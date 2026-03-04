@@ -16,4 +16,5 @@ COPY frontend/ ./frontend/
 COPY frontend/public /app/public
 RUN uv sync --package frontend
 
-CMD ["uv", "run", "--package", "frontend", "chainlit", "run", "frontend/main.py", "--host", "0.0.0.0", "--port", "8000"]
+
+CMD ["sh", "-c", "export CHAINLIT_AUTH_SECRET=None && uv run --package frontend chainlit run frontend/main.py --host 0.0.0.0 --port 8000"]
