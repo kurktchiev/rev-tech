@@ -1,0 +1,10 @@
+version: v7
+kind: role
+metadata:
+  name: access-db-dev-readonly
+spec:
+  allow:
+    db_labels:
+      env: dev
+    db_users: ["postgres"]
+    db_names: ["*"]

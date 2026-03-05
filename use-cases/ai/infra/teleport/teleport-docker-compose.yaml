@@ -2,7 +2,7 @@ services:
   agent-demo-teleport:
     #network_mode: host
     container_name: agent-teleport-cluster
-    image: public.ecr.aws/gravitational/teleport-distroless:18
+    image: public.ecr.aws/gravitational/teleport-distroless:${TELEPORT_VERSION}
     ports:
       - "3022:3022"
       - "3023:3023"
@@ -18,3 +18,29 @@ services:
     volumes:
       - ./persistence/etc:/etc/teleport
       - ./persistence/data:/var/lib/teleport
+  postgres:
+    container_name: postgres
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: sales
+    ports:
+      - "5432:5432"
+    restart: always
+    volumes:
+    - "./persistence/postgres/data/pg_hba.conf:/opt/postgres/pg_hba.conf"
+    - "./persistence/postgres/data/initdb.sh:/docker-entrypoint-initdb.d/config_hba.sh"
+    - "./persistence/postgres/data/initdb.sql:/docker-entrypoint-initdb.d/setup.sql"
+    - "./persistence/postgres/certs/server.cas:/opt/postgres/server.cas"
+    - "./persistence/postgres/certs/server.crt:/opt/postgres/server.crt"
+    - "./persistence/postgres/certs/server.key:/opt/postgres/server.key"
+    command:
+      - "-c"
+      - "ssl=on"
+      - "-c"
+      - "ssl_cert_file=/opt/postgres/server.crt"
+      - "-c"
+      - "ssl_key_file=/opt/postgres/server.key"
+      - "-c"
+      - "ssl_ca_file=/opt/postgres/server.cas"

@@ -1,0 +1,18 @@
+version: v7
+kind: role
+metadata:
+  name: access-mcp-dev
+spec:
+  allow:
+    app_labels:
+      env: dev
+    request:
+      roles:
+      - 'access'
+    mcp:
+      tools:
+      - ^(get|list|search|read|fetch).*$
+  deny:
+    mcp:
+      tools:
+      - write*

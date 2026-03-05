@@ -34,3 +34,11 @@ app_service:
   debug_app: false
 db_service:
   enabled: "yes"
+  databases:
+  - name: "my-postgres-sales"
+    description: "My database with sales records"
+    protocol: "postgres"
+    uri: postgres:5432
+    static_labels:
+      env: dev
+      mcp: read
