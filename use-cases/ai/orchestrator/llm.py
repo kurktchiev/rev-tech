@@ -10,17 +10,15 @@ def get_llm():
     Return an LLM instance based on LLM_PROVIDER env var.
     Used everywhere — no hardcoded model references in the codebase.
     """
-    provider = os.environ.get("ORCHESTRATOR_LLM_PROVIDER", "anthropic")
+    provider = os.environ.get("LLM_PROVIDER", "anthropic")
     if provider == "ollama":
         return ChatOllama(
             model=os.environ.get("OLLAMA_MODEL", "llama3.2"),
             base_url=os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
         )
-    if provider == "lmstudio":
+    if provider == "openai":
         return ChatOpenAI(
-            model=os.environ.get("LM_STUDIO_MODEL", "local-model"),
-            base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://host.docker.internal:1234/v1"),
-            api_key=os.environ.get("LM_STUDIO_API_KEY", "lm-studio"),
+            model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
         )
     return ChatAnthropic(
         model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),

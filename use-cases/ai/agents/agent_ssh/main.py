@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from agents.base_agent import BaseA2AAgent
-from agents.general_agent.graph import build_graph
+from agents.agent_ssh.graph import build_graph
 
 if __name__ == "__main__":
     port = int(os.environ.get("AGENT_PORT", 8080))

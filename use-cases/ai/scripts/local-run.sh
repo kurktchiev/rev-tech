@@ -43,9 +43,10 @@ check_env() {
 start_service() {
   local name=$1
   local module=$2
+  local port=${3:-}
   local log="$LOG_DIR/${name}.log"
-  echo "  Starting $name  →  $log"
-  PYTHONUNBUFFERED=1 uv run python -m "$module" > "$log" 2>&1 &
+  echo "  Starting $name  →  $log (port ${port:-default})"
+  AGENT_PORT="${port:-}" PYTHONUNBUFFERED=1 uv run python -m "$module" > "$log" 2>&1 &
   PIDS+=($!)
 }
 
@@ -84,14 +85,14 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "Starting agents..."
 
-[[ -f agents/general_agent/main.py ]] && start_service "general-agent" "agents.general_agent.main"
-[[ -f agents/agent_ssh/main.py ]]     && start_service "agent-ssh"     "agents.agent_ssh.main"
+[[ -f agents/general_agent/main.py ]] && start_service "general-agent" "agents.general_agent.main" 8081
+[[ -f agents/agent_ssh/main.py ]]     && start_service "agent-ssh"     "agents.agent_ssh.main"     8082
 
 echo ""
 echo "Waiting for agents to be healthy..."
 
-[[ -f agents/general_agent/main.py ]] && wait_healthy "general-agent" "http://localhost:9003"
-[[ -f agents/agent_ssh/main.py ]]     && wait_healthy "agent-ssh"     "http://localhost:8081"
+[[ -f agents/general_agent/main.py ]] && wait_healthy "general-agent" "http://localhost:8081"
+[[ -f agents/agent_ssh/main.py ]]     && wait_healthy "agent-ssh"     "http://localhost:8082"
 
 # ---------------------------------------------------------------------------
 # Orchestrator
@@ -109,8 +110,8 @@ echo "=== All services running ==="
 echo "Logs: $LOG_DIR"
 echo ""
 echo "  Orchestrator  →  http://localhost:9000"
-[[ -f agents/general_agent/main.py ]] && echo "  General Agent →  http://localhost:9003"
-[[ -f agents/agent_ssh/main.py ]]     && echo "  Agent SSH     →  http://localhost:8081"
+[[ -f agents/general_agent/main.py ]] && echo "  General Agent →  http://localhost:8081"
+[[ -f agents/agent_ssh/main.py ]]     && echo "  Agent SSH     →  http://localhost:8082"
 echo ""
 echo "Press Ctrl+C to stop all services."
 echo ""

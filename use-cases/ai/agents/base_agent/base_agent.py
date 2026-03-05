@@ -1,3 +1,7 @@
+import json
+import os
+from pathlib import Path
+
 import uvicorn
 from langchain_core.messages import HumanMessage
 
@@ -6,7 +10,7 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
-from a2a.types import AgentCard, Part, TextPart, UnsupportedOperationError
+from a2a.types import AgentCapabilities, AgentCard, AgentSkill, Part, TextPart, UnsupportedOperationError
 from a2a.utils.parts import get_text_parts
 
 
@@ -55,6 +59,22 @@ class BaseA2AAgent:
             http_handler=handler,
         )
 
-    def run(self, host: str = "0.0.0.0", port: int = 9001):
+    def run(self, host: str = "0.0.0.0", port: int = 8080):
+        self.card.url = f"http://{host}:{port}"
         app = self._a2a.build()
         uvicorn.run(app, host=host, port=port)
+
+    @staticmethod
+    def load_card(card_path: Path, port: int) -> AgentCard:
+        """Load an AgentCard from a JSON file, setting the URL to the actual port."""
+        raw = json.loads(card_path.read_text())
+        return AgentCard(
+            name=raw["name"],
+            description=raw["description"],
+            url=f"http://localhost:{port}",
+            version=raw["version"],
+            defaultInputModes=raw["defaultInputModes"],
+            defaultOutputModes=raw["defaultOutputModes"],
+            capabilities=AgentCapabilities(**raw["capabilities"]),
+            skills=[AgentSkill(**s) for s in raw["skills"]],
+        )
