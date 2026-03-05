@@ -7,11 +7,13 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orchestrator
+      demo: ai-agents
+      function: orchestrator
   template:
     metadata:
       labels:
-        app: orchestrator
+        demo: ai-agents
+        function: orchestrator
     spec:
       serviceAccountName: orchestrator-tbot
       # --- Init container: discover agents and generate tbot config ---
@@ -152,7 +154,8 @@ metadata:
   namespace: ai-agents
 spec:
   selector:
-    app: orchestrator
+      demo: ai-agents
+      function: orchestrator
   ports:
     - port: 9000
       targetPort: 9000
