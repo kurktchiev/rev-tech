@@ -19,11 +19,13 @@ build/
 # Go
 operator/bin/
 
-# Teleport certs (never commit)
+# Teleport certs and tokens (never commit)
 *.pem
 *.crt
 *.key
 .tsh/
+*-token.yaml
+!*-token.yaml.template
 
 # macOS
 .DS_Store

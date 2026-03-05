@@ -43,9 +43,10 @@ check_env() {
 start_service() {
   local name=$1
   local module=$2
+  local port=${3:-}
   local log="$LOG_DIR/${name}.log"
-  echo "  Starting $name  →  $log"
-  uv run python -m "$module" > "$log" 2>&1 &
+  echo "  Starting $name  →  $log (port ${port:-default})"
+  AGENT_PORT="${port:-}" PYTHONUNBUFFERED=1 uv run python -m "$module" > "$log" 2>&1 &
   PIDS+=($!)
 }
 
@@ -56,7 +57,7 @@ wait_healthy() {
   local max=30
   printf "  Waiting for %-20s" "$name..."
   while [[ $attempts -lt $max ]]; do
-    if curl -sf "${url}/.well-known/agent.json" > /dev/null 2>&1; then
+    if curl -sf "${url}/.well-known/agent-card.json" > /dev/null 2>&1; then
       echo " ready"
       return 0
     fi
@@ -84,29 +85,33 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "Starting agents..."
 
-[[ -f agents/general_agent/main.py ]] && start_service "general-agent" "agents.general_agent.main"
+[[ -f agents/general_agent/main.py ]] && start_service "general-agent" "agents.general_agent.main" 8081
+[[ -f agents/agent_ssh/main.py ]]     && start_service "agent-ssh"     "agents.agent_ssh.main"     8082
 
 echo ""
 echo "Waiting for agents to be healthy..."
 
-[[ -f agents/general_agent/main.py ]] && wait_healthy "general-agent" "http://localhost:9003"
+[[ -f agents/general_agent/main.py ]] && wait_healthy "general-agent" "http://localhost:8081"
+[[ -f agents/agent_ssh/main.py ]]     && wait_healthy "agent-ssh"     "http://localhost:8082"
 
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
-#echo ""
-#echo "Starting orchestrator..."
-#start_service "orchestrator" "orchestrator.main"
-#wait_healthy "orchestrator" "http://localhost:9000"
+echo ""
+echo "Starting orchestrator..."
+start_service "orchestrator" "orchestrator.main"
+wait_healthy "orchestrator" "http://localhost:9000"
 
 # ---------------------------------------------------------------------------
 # Ready
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== All services running ==="
+echo "Logs: $LOG_DIR"
 echo ""
-#echo "  Orchestrator  →  http://localhost:9000"
-[[ -f agents/general_agent/main.py ]] && echo "  General Agent →  http://localhost:9003"
+echo "  Orchestrator  →  http://localhost:9000"
+[[ -f agents/general_agent/main.py ]] && echo "  General Agent →  http://localhost:8081"
+[[ -f agents/agent_ssh/main.py ]]     && echo "  Agent SSH     →  http://localhost:8082"
 echo ""
 echo "Press Ctrl+C to stop all services."
 echo ""

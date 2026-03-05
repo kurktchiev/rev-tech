@@ -1,0 +1,33 @@
+{
+  "name": "SSH Infrastructure Agent",
+  "description": "Executes commands on remote hosts via SSH through Teleport to inspect logs, check system health, and run diagnostics. Use this agent for any task that requires reading log files, checking process status, disk usage, memory, or running shell commands on application servers.",
+  "url": "http://localhost:8080",
+  "version": "1.0.0",
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "capabilities": { "streaming": false },
+  "skills": [
+    {
+      "id": "log-inspection",
+      "name": "Log Inspection",
+      "description": "Read and search application and system logs on remote hosts via SSH. Useful for finding error messages, tracing request failures, and correlating timestamps across services. Knows standard log locations including /var/log/app/order-pipeline.log for application logs.",
+      "tags": ["ssh", "logs", "debugging", "infrastructure"],
+      "examples": [
+        "Show me the last 50 lines of the application logs",
+        "Search for OOM errors in the logs",
+        "Find all errors in the logs from the last hour"
+      ]
+    },
+    {
+      "id": "system-diagnostics",
+      "name": "System Diagnostics",
+      "description": "Run diagnostic commands on remote hosts to check CPU, memory, disk, network, and process health. Use this when investigating performance issues or resource exhaustion.",
+      "tags": ["ssh", "diagnostics", "health", "infrastructure"],
+      "examples": [
+        "Check disk usage on the app server",
+        "Show top processes by memory",
+        "Check if the payment service process is running"
+      ]
+    }
+  ]
+}

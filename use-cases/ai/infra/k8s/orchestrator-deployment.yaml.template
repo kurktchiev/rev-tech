@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: ai-agents
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      demo: ai-agents
+      function: orchestrator
+  template:
+    metadata:
+      labels:
+        demo: ai-agents
+        function: orchestrator
+    spec:
+      serviceAccountName: orchestrator-tbot
+      # --- Init container: discover agents and generate tbot config ---
+      initContainers:
+        - name: discover-agents
+          image: ${ORCHESTRATOR_IMAGE:-registry.ellin.net/orchestrator:latest}
+          command: ["bash", "/scripts/discover-and-configure.sh"]
+          env:
+            - name: TELEPORT_PROXY
+              value: "${TELEPORT_PROXY}:443"
+            - name: TELEPORT_IDENTITY_FILE
+              value: /opt/machine-id/identity/identity
+            - name: TSH_DISCOVERY_QUERY
+              value: '${ORCHESTRATOR_TSH_DISCOVERY_QUERY}'
+            - name: TBOT_INIT_CONFIG
+              value: /etc/tbot-init/tbot.yaml
+            - name: TBOT_GENERATED_CONFIG
+              value: /etc/tbot-generated/tbot.yaml
+            - name: AGENTS_JSON_PATH
+              value: /etc/agents/agents.json
+            - name: KUBERNETES_TOKEN_PATH
+              value: /var/run/secrets/tokens/join-token
+          volumeMounts:
+            - name: discover-script
+              mountPath: /scripts
+            - name: tbot-init-config
+              mountPath: /etc/tbot-init
+            - name: tbot-generated-config
+              mountPath: /etc/tbot-generated
+            - name: agents-config
+              mountPath: /etc/agents
+            - name: tbot-storage
+              mountPath: /opt/machine-id/storage
+            - name: tbot-identity
+              mountPath: /opt/machine-id/identity
+            - name: join-sa-token
+              mountPath: /var/run/secrets/tokens
+              readOnly: true
+
+      containers:
+        # --- Orchestrator ---
+        - name: orchestrator
+          image: ${ORCHESTRATOR_IMAGE:-registry.ellin.net/orchestrator:latest}
+          ports:
+            - containerPort: 9000
+          env:
+            - name: ORCHESTRATOR_PORT
+              value: "9000"
+            - name: LLM_PROVIDER
+              value: "${LLM_PROVIDER}"
+            - name: OPENAI_MODEL
+              value: "${OPENAI_MODEL}"
+            - name: OPENAI_BASE_URL
+              value: "${OPENAI_BASE_URL}"
+            - name: OPENAI_API_KEY
+              value: "${OPENAI_API_KEY}"
+            - name: TELEPORT_IDENTITY_FILE
+              value: /opt/machine-id/identity/identity
+            - name: TELEPORT_PROXY
+              value: "${TELEPORT_PROXY}:443"
+            - name: ORCHESTRATOR_TSH_DISCOVERY_QUERY
+              value: '${ORCHESTRATOR_TSH_DISCOVERY_QUERY}'
+            # Use tunnel-based agents.json from init container
+            - name: ORCHESTRATOR_AGENTS_CONFIG
+              value: /etc/agents/agents.json
+          volumeMounts:
+            - name: tbot-identity
+              mountPath: /opt/machine-id/identity
+              readOnly: true
+            - name: agents-config
+              mountPath: /etc/agents
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /.well-known/agent-card.json
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+
+        # --- tbot sidecar (reads generated config with application-tunnels) ---
+        - name: tbot
+          image: public.ecr.aws/gravitational/tbot-distroless:18.6.4
+          args:
+            - start
+            - -c
+            - /etc/tbot-generated/tbot.yaml
+            - --diag-addr=0.0.0.0:3025
+          env:
+            - name: KUBERNETES_TOKEN_PATH
+              value: /var/run/secrets/tokens/join-token
+          volumeMounts:
+            - name: tbot-generated-config
+              mountPath: /etc/tbot-generated
+            - name: tbot-storage
+              mountPath: /opt/machine-id/storage
+            - name: tbot-identity
+              mountPath: /opt/machine-id/identity
+            - name: join-sa-token
+              mountPath: /var/run/secrets/tokens
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 3025
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3025
+
+      volumes:
+        - name: discover-script
+          configMap:
+            name: orchestrator-discover-script
+            defaultMode: 0755
+        - name: tbot-init-config
+          configMap:
+            name: orchestrator-tbot-init-config
+        - name: tbot-generated-config
+          emptyDir: {}
+        - name: agents-config
+          emptyDir: {}
+        - name: tbot-storage
+          emptyDir: {}
+        - name: tbot-identity
+          emptyDir: {}
+        - name: join-sa-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: ${TELEPORT_PROXY}
+                  expirationSeconds: 600
+                  path: join-token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator
+  namespace: ai-agents
+spec:
+  selector:
+      demo: ai-agents
+      function: orchestrator
+  ports:
+    - port: 9000
+      targetPort: 9000

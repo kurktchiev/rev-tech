@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestrator-discover-script
+  namespace: ai-agents
+data:
+  discover-and-configure.sh: |
+    #!/usr/bin/env bash
+    # Init container script: discover agents via tsh, generate tbot config + agents.json
+    set -euo pipefail
+
+    TELEPORT_PROXY="${TELEPORT_PROXY:?TELEPORT_PROXY is required}"
+    TELEPORT_IDENTITY_FILE="${TELEPORT_IDENTITY_FILE:-/opt/machine-id/identity/identity}"
+    TSH_DISCOVERY_QUERY="${TSH_DISCOVERY_QUERY:-labels[\"app-type\"] == \"specialist\" && labels[\"demo\"] == \"ai-agents\"}"
+    TBOT_INIT_CONFIG="${TBOT_INIT_CONFIG:-/etc/tbot-init/tbot.yaml}"
+    TBOT_GENERATED_CONFIG="${TBOT_GENERATED_CONFIG:-/etc/tbot-generated/tbot.yaml}"
+    AGENTS_JSON_PATH="${AGENTS_JSON_PATH:-/etc/agents/agents.json}"
+    TBOT_STORAGE_DIR="${TBOT_STORAGE_DIR:-/opt/machine-id/storage}"
+    TBOT_IDENTITY_DIR="${TBOT_IDENTITY_DIR:-/opt/machine-id/identity}"
+    BASE_PORT="${BASE_PORT:-18000}"
+
+    echo "=== Agent Discovery Init Container ==="
+    echo "Proxy:  $TELEPORT_PROXY"
+    echo "Query:  $TSH_DISCOVERY_QUERY"
+    echo ""
+
+    # --- Phase 1: Start tbot to get an identity ---
+    echo "--- Phase 1: Getting Teleport identity ---"
+    mkdir -p "$TBOT_STORAGE_DIR" "$TBOT_IDENTITY_DIR"
+
+    tbot start -c "$TBOT_INIT_CONFIG" &
+    TBOT_PID=$!
+
+    echo "Waiting for identity..."
+    for i in $(seq 1 60); do
+      if [ -f "$TELEPORT_IDENTITY_FILE" ]; then
+        echo "Identity ready (${i}s)"
+        break
+      fi
+      if ! kill -0 "$TBOT_PID" 2>/dev/null; then
+        echo "ERROR: tbot exited unexpectedly"
+        exit 1
+      fi
+      sleep 1
+    done
+
+    if [ ! -f "$TELEPORT_IDENTITY_FILE" ]; then
+      echo "ERROR: Identity file not found after 60s"
+      kill "$TBOT_PID" 2>/dev/null || true
+      exit 1
+    fi
+
+    # --- Phase 2: Discover agents ---
+    echo ""
+    echo "--- Phase 2: Discovering agents ---"
+
+    APPS_JSON=$(tsh apps ls --query="$TSH_DISCOVERY_QUERY" --format=json 2>&1) || {
+      echo "ERROR: tsh apps ls failed: $APPS_JSON"
+      kill "$TBOT_PID" 2>/dev/null || true
+      exit 1
+    }
+
+    APP_NAMES=$(echo "$APPS_JSON" | python3 -c "
+    import json, sys
+    apps = json.load(sys.stdin)
+    names = []
+    for app in apps:
+        name = app.get('metadata', {}).get('name') or app.get('spec', {}).get('name') or app.get('name')
+        if name:
+            names.append(name)
+    for name in sorted(names):
+        print(name)
+    ")
+
+    if [ -z "$APP_NAMES" ]; then
+      echo "WARNING: No agents discovered."
+      APP_NAMES=""
+    fi
+
+    APP_COUNT=$(echo "$APP_NAMES" | grep -c . || true)
+    echo "Discovered $APP_COUNT agent(s):"
+    echo "$APP_NAMES" | sed 's/^/  - /'
+
+    # --- Phase 3: Generate tbot config ---
+    echo ""
+    echo "--- Phase 3: Generating tbot config ---"
+    mkdir -p "$(dirname "$TBOT_GENERATED_CONFIG")"
+
+    cat > "$TBOT_GENERATED_CONFIG" <<TBOT_EOF
+    version: v2
+    proxy_server: "${TELEPORT_PROXY}"
+    onboarding:
+      token: "orchestrator-bot-k8s-join"
+      join_method: kubernetes
+    storage:
+      type: directory
+      path: ${TBOT_STORAGE_DIR}
+    services:
+      - type: identity
+        destination:
+          type: directory
+          path: ${TBOT_IDENTITY_DIR}
+    TBOT_EOF
+
+    PORT=$BASE_PORT
+    while IFS= read -r app_name; do
+      [ -z "$app_name" ] && continue
+      cat >> "$TBOT_GENERATED_CONFIG" <<TUNNEL_EOF
+      - type: application-tunnel
+        app_name: ${app_name}
+        listen: tcp://127.0.0.1:${PORT}
+    TUNNEL_EOF
+      PORT=$((PORT + 1))
+    done <<< "$APP_NAMES"
+
+    echo "Generated tbot config:"
+    cat "$TBOT_GENERATED_CONFIG"
+
+    # --- Phase 4: Generate agents.json ---
+    echo ""
+    echo "--- Phase 4: Generating agents.json ---"
+    mkdir -p "$(dirname "$AGENTS_JSON_PATH")"
+
+    PORT=$BASE_PORT
+    python3 -c "
+    import json, sys
+    app_names = [n.strip() for n in sys.stdin.read().strip().split('\n') if n.strip()]
+    base_port = int(sys.argv[1])
+    agents = []
+    for i, name in enumerate(sorted(app_names)):
+        agents.append({'name': name, 'url': f'http://127.0.0.1:{base_port + i}'})
+    print(json.dumps(agents, indent=2))
+    " "$BASE_PORT" <<< "$APP_NAMES" > "$AGENTS_JSON_PATH"
+
+    echo "Generated agents.json:"
+    cat "$AGENTS_JSON_PATH"
+
+    # --- Phase 5: Stop tbot ---
+    echo ""
+    echo "--- Phase 5: Stopping init tbot ---"
+    kill "$TBOT_PID" 2>/dev/null || true
+    wait "$TBOT_PID" 2>/dev/null || true
+
+    echo ""
+    echo "=== Discovery complete: $APP_COUNT agent(s) ==="
