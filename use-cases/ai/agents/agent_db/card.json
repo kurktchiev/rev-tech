@@ -1,0 +1,22 @@
+{
+  "name": "Database Agent",
+  "description": "Queries a PostgreSQL database to answer questions about application data. Discovers tables and schemas dynamically and writes appropriate SQL queries. Use this for any question about orders, payments, users, transactions, or other structured data.",
+  "url": "http://localhost:8080",
+  "version": "1.0.0",
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "capabilities": { "streaming": false },
+  "skills": [
+    {
+      "id": "sql-query",
+      "name": "SQL Query",
+      "description": "Discovers database schema and runs read-only SQL queries to answer questions about structured data. Can list tables, inspect columns, and write targeted queries. Use for questions about orders, payments, counts, trends, failed transactions, or any data stored in the database.",
+      "tags": ["database", "sql", "query", "postgres"],
+      "examples": [
+        "How many orders failed in the last hour?",
+        "Show me the most recent payments with errors",
+        "What's the total revenue today?"
+      ]
+    }
+  ]
+}

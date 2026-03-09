@@ -55,7 +55,14 @@ async def _run_command(host: str, command: str) -> str:
     elif AGENT_SSH_MODE in ("tsh", "teleport"):
         # Teleport mode: use tsh ssh
         tsh = shutil.which("tsh") or "tsh"
-        cmd = [tsh, "ssh", f"{AGENT_SSH_USER}@{host}", "--", command]
+        cmd = [tsh, "ssh"]
+        identity = os.environ.get("TELEPORT_IDENTITY_FILE")
+        if identity:
+            cmd.extend(["-i", identity])
+        proxy = os.environ.get("TELEPORT_PROXY")
+        if proxy:
+            cmd.extend(["--proxy", proxy])
+        cmd.extend([f"{AGENT_SSH_USER}@{host}", command])
     else:
         return f"ERROR: Unknown AGENT_SSH_MODE '{AGENT_SSH_MODE}'. Use 'local', 'ssh', 'tsh', or 'teleport'."
 

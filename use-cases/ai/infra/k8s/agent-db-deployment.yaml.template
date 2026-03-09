@@ -1,45 +1,51 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-db-tbot
+  namespace: ai-agents
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orchestrator
+  name: agent-db
   namespace: ai-agents
 spec:
   replicas: 1
   selector:
     matchLabels:
       demo: ai-agents
-      function: orchestrator
+      function: agent-db
   template:
     metadata:
       labels:
         demo: ai-agents
-        function: orchestrator
+        function: agent-db
     spec:
-      serviceAccountName: orchestrator-tbot
-      # --- Init container: discover agents and generate tbot config ---
+      serviceAccountName: agent-db-tbot
+      # --- Init container: discover databases and generate tbot config ---
       initContainers:
-        - name: discover-agents
-          image: ${ORCHESTRATOR_IMAGE}
-          command: ["bash", "/scripts/discover-and-configure.sh"]
+        - name: discover-databases
+          image: ${AGENT_DB_IMAGE}
+          command: ["bash", "/scripts/discover-databases.sh"]
           env:
             - name: TELEPORT_PROXY
               value: "${TELEPORT_PROXY}:443"
             - name: TELEPORT_IDENTITY_FILE
               value: /opt/machine-id/identity/identity
-            - name: TSH_DISCOVERY_QUERY
-              value: '${ORCHESTRATOR_TSH_DISCOVERY_QUERY}'
             - name: TSH_DB_DISCOVERY_QUERY
-              value: '${ORCHESTRATOR_TSH_DB_DISCOVERY_QUERY}'
-            - name: TBOT_JOIN_TOKEN
-              value: orchestrator-bot-k8s-join
-            - name: DATABASES_JSON_PATH
-              value: /etc/agents/databases.json
+              value: '${AGENT_DB_TSH_DISCOVERY_QUERY}'
             - name: TBOT_INIT_CONFIG
               value: /etc/tbot-init/tbot.yaml
             - name: TBOT_GENERATED_CONFIG
               value: /etc/tbot-generated/tbot.yaml
-            - name: AGENTS_JSON_PATH
-              value: /etc/agents/agents.json
+            - name: TBOT_JOIN_TOKEN
+              value: agent-db-bot-k8s-join
+            - name: DATABASES_JSON_PATH
+              value: /etc/databases/databases.json
+            - name: DEFAULT_DB_USER
+              value: "bot-agent-db-bot"
+            - name: DEFAULT_DB_NAME
+              value: "demo"
             - name: KUBERNETES_TOKEN_PATH
               value: /var/run/secrets/tokens/join-token
           volumeMounts:
@@ -49,8 +55,8 @@ spec:
               mountPath: /etc/tbot-init
             - name: tbot-generated-config
               mountPath: /etc/tbot-generated
-            - name: agents-config
-              mountPath: /etc/agents
+            - name: databases-config
+              mountPath: /etc/databases
             - name: tbot-storage
               mountPath: /opt/machine-id/storage
             - name: tbot-identity
@@ -60,14 +66,15 @@ spec:
               readOnly: true
 
       containers:
-        # --- Orchestrator ---
-        - name: orchestrator
-          image: ${ORCHESTRATOR_IMAGE}
+        # --- Agent DB ---
+        - name: agent-db
+          image: ${AGENT_DB_IMAGE}
+          command: ["python", "-m", "agents.agent_db.main"]
           ports:
-            - containerPort: 9000
+            - containerPort: 8080
           env:
-            - name: ORCHESTRATOR_PORT
-              value: "9000"
+            - name: AGENT_PORT
+              value: "8080"
             - name: LLM_PROVIDER
               value: "${LLM_PROVIDER}"
             - name: OPENAI_MODEL
@@ -76,34 +83,20 @@ spec:
               value: "${OPENAI_BASE_URL}"
             - name: OPENAI_API_KEY
               value: "${OPENAI_API_KEY}"
-            - name: TELEPORT_IDENTITY_FILE
-              value: /opt/machine-id/identity/identity
-            - name: TELEPORT_PROXY
-              value: "${TELEPORT_PROXY}:443"
-            - name: ORCHESTRATOR_TSH_DISCOVERY_QUERY
-              value: '${ORCHESTRATOR_TSH_DISCOVERY_QUERY}'
-            # Use tunnel-based config from init container
-            - name: ORCHESTRATOR_TUNNEL_MODE
-              value: "true"
-            - name: ORCHESTRATOR_AGENTS_CONFIG
-              value: /etc/agents/agents.json
-            - name: ORCHESTRATOR_DATABASES_CONFIG
-              value: /etc/agents/databases.json
+            - name: DATABASES_CONFIG
+              value: /etc/databases/databases.json
           volumeMounts:
-            - name: tbot-identity
-              mountPath: /opt/machine-id/identity
-              readOnly: true
-            - name: agents-config
-              mountPath: /etc/agents
+            - name: databases-config
+              mountPath: /etc/databases
               readOnly: true
           readinessProbe:
             httpGet:
               path: /.well-known/agent-card.json
-              port: 9000
-            initialDelaySeconds: 15
+              port: 8080
+            initialDelaySeconds: 10
             periodSeconds: 5
 
-        # --- tbot sidecar (reads generated config with application-tunnels) ---
+        # --- tbot sidecar (runs database-tunnels from generated config) ---
         - name: tbot
           image: public.ecr.aws/gravitational/tbot-distroless:18.6.4
           args:
@@ -136,14 +129,14 @@ spec:
       volumes:
         - name: discover-script
           configMap:
-            name: orchestrator-discover-script
+            name: agent-db-discover-script
             defaultMode: 0755
         - name: tbot-init-config
           configMap:
-            name: orchestrator-tbot-init-config
+            name: agent-db-tbot-init-config
         - name: tbot-generated-config
           emptyDir: {}
-        - name: agents-config
+        - name: databases-config
           emptyDir: {}
         - name: tbot-storage
           emptyDir: {}
@@ -160,12 +153,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: orchestrator
+  name: agent-db
   namespace: ai-agents
+  labels:
+    teleport.expose: "true"
+    app-type: specialist
+    demo: ai-agents
 spec:
   selector:
-      demo: ai-agents
-      function: orchestrator
+    demo: ai-agents
+    function: agent-db
   ports:
-    - port: 9000
-      targetPort: 9000
+    - port: 8080
+      targetPort: 8080

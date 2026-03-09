@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Start all services locally — no Docker, no K8s.
-# Can be run from any directory: ./scripts/local-run.sh or scripts/local-run.sh
+# Start services locally — no Docker, no K8s.
+#
+# Usage:
+#   ./scripts/local-run.sh              # start all agents + orchestrator
+#   ./scripts/local-run.sh agent-db     # start only agent-db
+#   ./scripts/local-run.sh agent-ssh    # start only agent-ssh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,6 +15,7 @@ if [[ -f .env ]]; then
   set -a; source .env; set +a
 fi
 
+ONLY="${1:-}"
 PIDS=()
 LOG_DIR="${LOG_DIR:-/tmp/a2a-demo-logs}"
 mkdir -p "$LOG_DIR"
@@ -38,6 +43,11 @@ check_env() {
     echo "       Set it in your environment or run: LLM_PROVIDER=ollama ./scripts/local-run.sh"
     exit 1
   fi
+}
+
+# Returns 0 if the named service should be started
+should_run() {
+  [[ -z "$ONLY" || "$ONLY" == "$1" ]]
 }
 
 start_service() {
@@ -85,33 +95,38 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "Starting agents..."
 
-[[ -f agents/general_agent/main.py ]] && start_service "general-agent" "agents.general_agent.main" 8081
-[[ -f agents/agent_ssh/main.py ]]     && start_service "agent-ssh"     "agents.agent_ssh.main"     8082
+should_run "general-agent" && [[ -f agents/general_agent/main.py ]] && start_service "general-agent" "agents.general_agent.main" 8081
+should_run "agent-ssh"     && [[ -f agents/agent_ssh/main.py ]]     && start_service "agent-ssh"     "agents.agent_ssh.main"     8082
+should_run "agent-db"      && [[ -f agents/agent_db/main.py ]]      && start_service "agent-db"      "agents.agent_db.main"      8083
 
 echo ""
 echo "Waiting for agents to be healthy..."
 
-[[ -f agents/general_agent/main.py ]] && wait_healthy "general-agent" "http://localhost:8081"
-[[ -f agents/agent_ssh/main.py ]]     && wait_healthy "agent-ssh"     "http://localhost:8082"
+should_run "general-agent" && [[ -f agents/general_agent/main.py ]] && wait_healthy "general-agent" "http://localhost:8081"
+should_run "agent-ssh"     && [[ -f agents/agent_ssh/main.py ]]     && wait_healthy "agent-ssh"     "http://localhost:8082"
+should_run "agent-db"      && [[ -f agents/agent_db/main.py ]]      && wait_healthy "agent-db"      "http://localhost:8083"
 
 # ---------------------------------------------------------------------------
-# Orchestrator
+# Orchestrator (skip when running a single agent)
 # ---------------------------------------------------------------------------
-echo ""
-echo "Starting orchestrator..."
-start_service "orchestrator" "orchestrator.main"
-wait_healthy "orchestrator" "http://localhost:9000"
+if should_run "orchestrator"; then
+  echo ""
+  echo "Starting orchestrator..."
+  start_service "orchestrator" "orchestrator.main"
+  wait_healthy "orchestrator" "http://localhost:9000"
+fi
 
 # ---------------------------------------------------------------------------
 # Ready
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== All services running ==="
+echo "=== Services running ==="
 echo "Logs: $LOG_DIR"
 echo ""
-echo "  Orchestrator  →  http://localhost:9000"
-[[ -f agents/general_agent/main.py ]] && echo "  General Agent →  http://localhost:8081"
-[[ -f agents/agent_ssh/main.py ]]     && echo "  Agent SSH     →  http://localhost:8082"
+should_run "orchestrator"  && echo "  Orchestrator  →  http://localhost:9000"
+should_run "general-agent" && [[ -f agents/general_agent/main.py ]] && echo "  General Agent →  http://localhost:8081"
+should_run "agent-ssh"     && [[ -f agents/agent_ssh/main.py ]]     && echo "  Agent SSH     →  http://localhost:8082"
+should_run "agent-db"      && [[ -f agents/agent_db/main.py ]]      && echo "  Agent DB      →  http://localhost:8083"
 echo ""
 echo "Press Ctrl+C to stop all services."
 echo ""

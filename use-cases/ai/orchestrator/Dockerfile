@@ -16,6 +16,7 @@ COPY pyproject.toml ./
 COPY agents/pyproject.toml agents/
 COPY agents/__init__.py agents/
 COPY agents/base_agent/ agents/base_agent/
+COPY agents/teleport/ agents/teleport/
 COPY agents/general_agent/ agents/general_agent/
 COPY orchestrator/ orchestrator/
 

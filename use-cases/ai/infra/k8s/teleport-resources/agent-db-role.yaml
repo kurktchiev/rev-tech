@@ -1,0 +1,15 @@
+kind: role
+version: v7
+metadata:
+  name: agent-db-access
+spec:
+  options:
+    create_db_user: true
+  allow:
+    db_labels:
+      env: dev
+      owner: homelab
+    db_names:
+      - '*'
+    db_users:
+      - '*'

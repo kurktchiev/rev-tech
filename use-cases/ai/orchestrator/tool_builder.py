@@ -1,8 +1,11 @@
 import uuid
 
 import httpx
+import structlog
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel
+
+logger = structlog.get_logger()
 
 
 class AgentInput(BaseModel):
@@ -42,19 +45,56 @@ def build_tool_from_card(card: dict, base_url: str, cert=None, ca=None) -> Struc
             },
         }
         async with httpx.AsyncClient(cert=_cert, verify=_ca or True) as client:
-            resp = await client.post(_base_url, json=payload, timeout=30)
+            resp = await client.post(_base_url, json=payload, timeout=120)
             resp.raise_for_status()
             data = resp.json()
 
-        parts = (
-            data.get("result", {})
-            .get("artifacts", [{}])[0]
-            .get("parts", [])
-        )
-        return next(
-            (p["text"] for p in parts if p.get("kind") == "text"),
-            "No response",
-        )
+        # Check for JSON-RPC error
+        if "error" in data:
+            logger.error("a2a error", url=_base_url, error=data["error"])
+            return f"Agent error: {data['error']}"
+
+        result = data.get("result", {})
+        logger.info("a2a response received", url=_base_url, keys=list(result.keys()))
+
+        # A2A message/send can return a Task (with artifacts) or a Message (with parts)
+        kind = result.get("kind", "")
+
+        # Try Task format: result.artifacts[0].parts
+        artifacts = result.get("artifacts") or []
+        if artifacts:
+            parts = artifacts[0].get("parts", [])
+            text = next((p["text"] for p in parts if p.get("kind") == "text"), None)
+            if text:
+                return text
+
+        # Try Message format: result.parts
+        parts = result.get("parts", [])
+        if parts:
+            text = next((p["text"] for p in parts if p.get("kind") == "text"), None)
+            if text:
+                return text
+
+        # Try history (last message in task history)
+        history = result.get("history", [])
+        if history:
+            last = history[-1]
+            parts = last.get("parts", [])
+            text = next((p["text"] for p in parts if p.get("kind") == "text"), None)
+            if text:
+                return text
+
+        # Try status message
+        status = result.get("status", {})
+        status_msg = status.get("message")
+        if status_msg and isinstance(status_msg, dict):
+            parts = status_msg.get("parts", [])
+            text = next((p["text"] for p in parts if p.get("kind") == "text"), None)
+            if text:
+                return text
+
+        logger.warning("no text in a2a response", url=_base_url, result=result)
+        return "No response"
 
     return StructuredTool.from_function(
         coroutine=call_agent,
