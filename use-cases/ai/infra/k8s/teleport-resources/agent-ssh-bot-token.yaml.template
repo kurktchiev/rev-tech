@@ -1,0 +1,17 @@
+# Join token for agent-ssh-bot
+# DO NOT EDIT - use setup.sh to generate agent-ssh-bot-token.yaml from this template
+kind: token
+version: v2
+metadata:
+  name: agent-ssh-bot-k8s-join
+spec:
+  bot_name: agent-ssh-bot
+  roles:
+    - Bot
+  join_method: kubernetes
+  kubernetes:
+    type: static_jwks
+    allow:
+      - service_account: "ai-agents:agent-ssh-tbot"
+    static_jwks:
+      jwks: 'PASTE_JWKS_HERE'

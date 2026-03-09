@@ -1,0 +1,11 @@
+kind: role
+version: v7
+metadata:
+  name: agent-ssh-access
+spec:
+  allow:
+    node_labels:
+      location: homelab
+    logins:
+      - ubuntu
+      - root

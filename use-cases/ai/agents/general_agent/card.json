@@ -1,7 +1,7 @@
 {
   "name": "General Knowledge Agent",
   "description": "Answers general knowledge questions using a locally-hosted Ollama LLM. Best for open-ended questions, explanations, summaries, and reasoning tasks that do not require database access or document retrieval.",
-  "url": "http://localhost:9003",
+  "url": "http://localhost:8080",
   "version": "1.0.0",
   "defaultInputModes": ["text"],
   "defaultOutputModes": ["text"],
