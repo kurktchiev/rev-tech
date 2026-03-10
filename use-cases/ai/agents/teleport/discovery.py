@@ -109,7 +109,7 @@ async def discover_databases(
 
 
 # ---------------------------------------------------------------------------
-# Local proxies (for local dev)
+# Wait for Local proxies to become active;
 # ---------------------------------------------------------------------------
 
 async def _wait_for_listener(

@@ -4,7 +4,7 @@ from agents.base_agent import get_llm
 
 
 def build_graph():
-    llm = get_llm("GENERAL_AGENT_LLM_PROVIDER")
+    llm = get_llm("LLM_PROVIDER")
 
     def agent_node(state: MessagesState):
         return {"messages": [llm.invoke(state["messages"])]}

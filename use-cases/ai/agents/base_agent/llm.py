@@ -15,8 +15,10 @@ def get_llm(provider_env="LLM_PROVIDER"):
     if provider == "openai":
         return ChatOpenAI(
             model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
+            base_url=os.environ.get("OPENAI_BASE_URL", "gpt-4o"),
+            api_key=os.environ["OPENAI_API_KEY"]
         )
     return ChatAnthropic(
         model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
-        api_key=os.environ["ANTHROPIC_API_KEY"],
+        api_key=os.environ["ANTHROPIC_API_KEY"]
     )
