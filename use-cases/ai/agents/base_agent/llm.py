@@ -5,8 +5,8 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 
-def get_llm():
-    provider = os.environ.get("LLM_PROVIDER", "anthropic")
+def get_llm(provider_env="LLM_PROVIDER"):
+    provider = os.environ.get(provider_env, "anthropic")
     if provider == "ollama":
         return ChatOllama(
             model=os.environ.get("OLLAMA_MODEL", "llama3.2"),
@@ -15,8 +15,10 @@ def get_llm():
     if provider == "openai":
         return ChatOpenAI(
             model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
+            base_url=os.environ.get("OPENAI_BASE_URL", "gpt-4o"),
+            api_key=os.environ["OPENAI_API_KEY"]
         )
     return ChatAnthropic(
         model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
-        api_key=os.environ["ANTHROPIC_API_KEY"],
+        api_key=os.environ["ANTHROPIC_API_KEY"]
     )
