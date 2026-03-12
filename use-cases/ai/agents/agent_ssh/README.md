@@ -36,10 +36,14 @@ LangGraph ReAct agent with a single `ssh_exec` tool. The LLM decides which host 
 AGENT_SSH_MODE=local python -m agents.agent_ssh.main
 
 # Plain SSH
-AGENT_SSH_MODE=ssh AGENT_SSH_USER=root python -m agents.agent_ssh.main
+AGENT_SSH_MODE=ssh 
+AGENT_SSH_USER=root 
+python -m agents.agent_ssh.main
 
 # Teleport
-AGENT_SSH_MODE=teleport AGENT_SSH_USER=root python -m agents.agent_ssh.main
+AGENT_SSH_MODE=teleport 
+AGENT_SSH_USER=root 
+python -m agents.agent_ssh.main
 ```
 
 ## Endpoints
