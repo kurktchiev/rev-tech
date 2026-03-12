@@ -53,6 +53,7 @@ curl -X POST http://localhost:8080 \
     "method": "message/send",
     "params": {
       "message": {
+        "messageId": "1",
         "role": "user",
         "parts": [{"kind": "text", "text": "Explain how TLS certificates work"}]
       }
