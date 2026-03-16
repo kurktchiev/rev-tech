@@ -17,22 +17,6 @@ LangGraph ReAct agent with three tools for schema discovery and query execution.
 - `graph.py` -- ReAct agent with SQL tools and system prompt
 - `card.json` -- Agent metadata and skill definitions consumed by the orchestrator
 
-## Prerequisites
-
-The database must be:
-
-1. **Registered in Teleport** as a database resource (see `infra/k8s/SETUP_GUIDE.md` for Teleport DB agent config)
-2. **Accessible via `tsh db`** -- ensure you have a valid Teleport session (`tsh login`)
-3. **Seeded with demo data** using the provided seed script:
-
-```bash
-tsh db connect demo-postgres-db --db-user=teleport_admin --db-name=demo < scripts/seed-db.sql
-```
-
-This creates `bookings.orders` and `bookings.payments` tables with sample data.
-
-When using Teleport discovery, the agent builds `DATABASE_URL` automatically pointing to the local tunnel endpoint -- you don't need to set it yourself. To connect directly to a database without Teleport, set `DATABASE_URL` with your connection string (e.g., `postgresql://user:pass@host:5432/mydb`) and set `AGENT_DB_SKIP_DISCOVERY=true`.
-
 ## Configuration
 
 | Variable | Description | Default |
