@@ -17,6 +17,6 @@ COPY general_agent/ ./agents/general_agent/
 # Install dependencies
 RUN uv pip install --system .
 
-EXPOSE 9003
+EXPOSE 8080
 
 CMD ["python", "-m", "agents.general_agent.main"]
