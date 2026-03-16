@@ -1,7 +1,7 @@
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from orchestrator.llm import get_llm
+from agents.base_agent.llm import get_llm
 
 
 def build_orchestrator(tools: list):

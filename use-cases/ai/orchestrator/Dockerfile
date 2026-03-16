@@ -15,6 +15,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY agents/pyproject.toml agents/
 COPY agents/__init__.py agents/
+COPY agents/base_agent/ agents/base_agent/
 COPY agents/teleport/ agents/teleport/
 COPY orchestrator/ orchestrator/
 
