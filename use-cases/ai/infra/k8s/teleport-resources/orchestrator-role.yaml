@@ -1,9 +1,0 @@
-kind: role
-version: v7
-metadata:
-  name: orchestrator-app-access
-spec:
-  allow:
-    app_labels:
-      app-type: specialist
-      demo: ai-agents
