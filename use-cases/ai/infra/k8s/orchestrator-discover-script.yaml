@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestrator-discover-script
+  namespace: ai-agents
+data:
+  discover-and-configure.sh: |
+    #!/usr/bin/env bash
+    # Init container: discover agents + databases via tsh, generate tbot config + JSON manifests
+    set -euo pipefail
+
+    TELEPORT_PROXY="${TELEPORT_PROXY:?TELEPORT_PROXY is required}"
+    TELEPORT_IDENTITY_FILE="${TELEPORT_IDENTITY_FILE:-/opt/machine-id/identity/identity}"
+    TSH_DISCOVERY_QUERY="${TSH_DISCOVERY_QUERY:-labels[\"app-type\"] == \"specialist\" && labels[\"demo\"] == \"ai-agents\"}"
+    TSH_DB_DISCOVERY_QUERY="${TSH_DB_DISCOVERY_QUERY:-labels[\"demo\"] == \"ai-agents\"}"
+    TBOT_INIT_CONFIG="${TBOT_INIT_CONFIG:-/etc/tbot-init/tbot.yaml}"
+    TBOT_GENERATED_CONFIG="${TBOT_GENERATED_CONFIG:-/etc/tbot-generated/tbot.yaml}"
+    TBOT_JOIN_TOKEN="${TBOT_JOIN_TOKEN:-orchestrator-bot-k8s-join}"
+    AGENTS_JSON_PATH="${AGENTS_JSON_PATH:-/etc/agents/agents.json}"
+    DATABASES_JSON_PATH="${DATABASES_JSON_PATH:-/etc/agents/databases.json}"
+    TBOT_STORAGE_DIR="${TBOT_STORAGE_DIR:-/opt/machine-id/storage}"
+    TBOT_IDENTITY_DIR="${TBOT_IDENTITY_DIR:-/opt/machine-id/identity}"
+    BASE_PORT="${BASE_PORT:-18000}"
+    BASE_DB_PORT="${BASE_DB_PORT:-19000}"
+    DEFAULT_DB_USER="${DEFAULT_DB_USER:-}"
+    DEFAULT_DB_NAME="${DEFAULT_DB_NAME:-}"
+
+    echo "=== Agent Discovery Init Container ==="
+    echo "Proxy:     $TELEPORT_PROXY"
+    echo "App Query: $TSH_DISCOVERY_QUERY"
+    echo "DB Query:  $TSH_DB_DISCOVERY_QUERY"
+    echo ""
+
+    # --- Phase 1: Start tbot to get an identity ---
+    echo "--- Phase 1: Getting Teleport identity ---"
+    mkdir -p "$TBOT_STORAGE_DIR" "$TBOT_IDENTITY_DIR"
+
+    tbot start -c "$TBOT_INIT_CONFIG" &
+    TBOT_PID=$!
+
+    echo "Waiting for identity..."
+    for i in $(seq 1 60); do
+      if [ -f "$TELEPORT_IDENTITY_FILE" ]; then
+        echo "Identity ready (${i}s)"
+        break
+      fi
+      if ! kill -0 "$TBOT_PID" 2>/dev/null; then
+        echo "ERROR: tbot exited unexpectedly"
+        exit 1
+      fi
+      sleep 1
+    done
+
+    if [ ! -f "$TELEPORT_IDENTITY_FILE" ]; then
+      echo "ERROR: Identity file not found after 60s"
+      kill "$TBOT_PID" 2>/dev/null || true
+      exit 1
+    fi
+
+    # --- Phase 2: Discover resources and generate configs ---
+    echo ""
+    echo "--- Phase 2: Discovering resources and generating configs ---"
+
+    mkdir -p "$(dirname "$TBOT_GENERATED_CONFIG")" "$(dirname "$AGENTS_JSON_PATH")" "$(dirname "$DATABASES_JSON_PATH")"
+
+    python3 -c "
+    import json, subprocess, sys, os
+
+    # -- Discover apps --
+    apps_result = subprocess.run(
+        ['tsh', 'apps', 'ls', '--query=${TSH_DISCOVERY_QUERY}', '--format=json'],
+        capture_output=True, text=True
+    )
+    if apps_result.returncode != 0:
+        print(f'ERROR: tsh apps ls failed: {apps_result.stderr}', file=sys.stderr)
+        sys.exit(1)
+
+    apps = json.loads(apps_result.stdout)
+    app_names = sorted(
+        a.get('metadata', {}).get('name') or a.get('spec', {}).get('name') or a.get('name', '')
+        for a in apps if (a.get('metadata', {}).get('name') or a.get('spec', {}).get('name') or a.get('name'))
+    )
+    print(f'Discovered {len(app_names)} agent(s):')
+    for n in app_names:
+        print(f'  - {n}')
+
+    # -- Discover databases --
+    dbs_result = subprocess.run(
+        ['tsh', 'db', 'ls', '--query=${TSH_DB_DISCOVERY_QUERY}', '--format=json'],
+        capture_output=True, text=True
+    )
+    db_list = []
+    if dbs_result.returncode == 0:
+        dbs = json.loads(dbs_result.stdout)
+        default_user = os.environ.get('DEFAULT_DB_USER', '')
+        default_name = os.environ.get('DEFAULT_DB_NAME', '')
+        for db in dbs:
+            meta = db.get('metadata', {})
+            spec = db.get('spec', {})
+            labels = meta.get('labels', {})
+            name = meta.get('name') or db.get('name')
+            if not name:
+                continue
+            db_list.append({
+                'name': name,
+                'protocol': spec.get('protocol') or db.get('protocol', ''),
+                'username': labels.get('db-user') or default_user,
+                'database': labels.get('db-name') or default_name,
+            })
+        db_list.sort(key=lambda d: d['name'])
+    else:
+        print(f'WARNING: tsh db ls failed: {dbs_result.stderr}', file=sys.stderr)
+
+    print(f'Discovered {len(db_list)} database(s):')
+    for d in db_list:
+        print(f'  - {d[\"name\"]} ({d[\"protocol\"]})')
+
+    # -- Build configs using shared module --
+    from agents.teleport import TbotConfigBuilder
+
+    builder = TbotConfigBuilder(
+        proxy_server='${TELEPORT_PROXY}',
+        join_token='${TBOT_JOIN_TOKEN}',
+        join_method='kubernetes',
+        storage_path='${TBOT_STORAGE_DIR}',
+        identity_path='${TBOT_IDENTITY_DIR}',
+    )
+    builder.add_app_tunnels(app_names, base_port=int('${BASE_PORT}'))
+    builder.add_db_tunnels(db_list, base_port=int('${BASE_DB_PORT}'))
+
+    with open('${TBOT_GENERATED_CONFIG}', 'w') as f:
+        f.write(builder.render_tbot_yaml())
+    with open('${AGENTS_JSON_PATH}', 'w') as f:
+        f.write(builder.render_agents_json())
+    with open('${DATABASES_JSON_PATH}', 'w') as f:
+        f.write(builder.render_databases_json())
+
+    print()
+    print('Generated tbot config:')
+    print(open('${TBOT_GENERATED_CONFIG}').read())
+    print('Generated agents.json:')
+    print(open('${AGENTS_JSON_PATH}').read())
+    print('Generated databases.json:')
+    print(open('${DATABASES_JSON_PATH}').read())
+    "
+
+    # --- Phase 3: Stop tbot ---
+    echo ""
+    echo "--- Phase 3: Stopping init tbot ---"
+    kill "$TBOT_PID" 2>/dev/null || true
+    wait "$TBOT_PID" 2>/dev/null || true
+
+    echo ""
+    echo "=== Discovery complete ==="
+    echo "  tbot config:    $TBOT_GENERATED_CONFIG"
+    echo "  agents.json:    $AGENTS_JSON_PATH"
+    echo "  databases.json: $DATABASES_JSON_PATH"

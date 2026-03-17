@@ -1,0 +1,10 @@
+{
+  "variables": {
+    "light": {
+      "--primary": "258 63% 49%"
+    },
+    "dark": {
+      "--primary": "258 63% 49%"
+    }
+  }
+}

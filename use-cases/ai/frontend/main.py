@@ -1,14 +1,14 @@
 import json
+import uuid
 import jwt
 from typing import Optional, Dict
 import chainlit as cl
 import httpx
-from mcp import ClientSession
 from os import environ
 
 
-CHAT_COMPLETION_URL = environ.get("CHAINLIT_CHAT_COMPLETION_URL")
-CHAT_MODEL = environ.get("CHAINLIT_CHAT_MODEL")
+ORCHESTRATOR_URL = environ.get("ORCHESTRATOR_URL", "http://localhost:9000")
+ORCHESTRATOR_FALLBACK_URL = environ.get("ORCHESTRATOR_FALLBACK_URL", "")
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. "
@@ -24,7 +24,8 @@ SYSTEM_PROMPT = (
 async def header_auth_callback(headers: Dict) -> Optional[cl.User]:
     token = headers.get("teleport-jwt-assertion")
     if not token:
-        return None
+        # Local development: allow unauthenticated access
+        return cl.User(identifier="dev", display_name="Developer")
 
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
@@ -34,7 +35,7 @@ async def header_auth_callback(headers: Dict) -> Optional[cl.User]:
         if not sub:
             return None
 
-        display = traits.get("logins", [sub])[0]
+        display = payload.get("username", sub)
 
         return cl.User(
             identifier=sub,
@@ -45,90 +46,82 @@ async def header_auth_callback(headers: Dict) -> Optional[cl.User]:
         print(f"Failed to parse Teleport JWT: {e}")
         return None
 
+
 # ---------------------------------------------------------------------
-# MCP connection: expose tools to Ollama
+# A2A client: send message to orchestrator via JSON-RPC 2.0
 # ---------------------------------------------------------------------
 
-@cl.on_mcp_connect
-async def on_mcp_connect(connection, session: ClientSession):
-    result = await session.list_tools()
-
-    tools = []
-    for t in result.tools:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": t.name,
-                "description": t.description or "",
-                "parameters": t.inputSchema or {
-                    "type": "object",
-                    "properties": {}
-                },
+async def a2a_send_message(text: str) -> str:
+    """Send a message/send JSON-RPC request to the orchestrator and return the response text."""
+    payload = {
+        "jsonrpc": "2.0",
+        "id": str(uuid.uuid4()),
+        "method": "message/send",
+        "params": {
+            "message": {
+                "messageId": str(uuid.uuid4()),
+                "role": "user",
+                "parts": [{"kind": "text", "text": text}],
             }
-        })
+        },
+    }
 
-    cl.user_session.set("ollama_tools", tools)
+    urls = [ORCHESTRATOR_URL]
+    if ORCHESTRATOR_FALLBACK_URL:
+        urls.append(ORCHESTRATOR_FALLBACK_URL)
 
+    last_err = None
+    async with httpx.AsyncClient(timeout=120) as client:
+        for url in urls:
+            try:
+                resp = await client.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+                last_err = e
+                continue
+        else:
+            raise last_err
 
-# ---------------------------------------------------------------------
-# Tool execution (FastMCP)
-# ---------------------------------------------------------------------
+    # Handle JSON-RPC error
+    if "error" in data:
+        error = data["error"]
+        return f"Error from orchestrator: {error.get('message', 'unknown error')}"
 
-@cl.step(type="tool")
-async def execute_tool(tool_call, messages):
-    tool_name = tool_call["function"]["name"]
+    result = data.get("result", {})
 
-    raw_args = tool_call["function"].get("arguments", {})
+    # Task response: artifacts[].parts[]
+    artifacts = result.get("artifacts", [])
+    if artifacts:
+        for artifact in artifacts:
+            for part in artifact.get("parts", []):
+                if part.get("kind") == "text":
+                    return part["text"]
 
-    # Normalize arguments
-    if isinstance(raw_args, str):
-        try:
-            tool_args = json.loads(raw_args)
-        except json.JSONDecodeError:
-            tool_args = {}
-    elif isinstance(raw_args, dict):
-        tool_args = raw_args
-    else:
-        tool_args = {}
+    # Message response: result.parts[] or result.message.parts[]
+    for key in ("parts", "message"):
+        container = result.get(key)
+        if container is None:
+            continue
+        parts = container if isinstance(container, list) else container.get("parts", [])
+        for part in parts:
+            if part.get("kind") == "text":
+                return part["text"]
 
-    step = cl.context.current_step
-    step.name = tool_name
+    # Status message fallback
+    status = result.get("status", {})
+    status_msg = status.get("message")
+    if status_msg and isinstance(status_msg, dict):
+        for part in status_msg.get("parts", []):
+            if part.get("kind") == "text":
+                return part["text"]
 
-    mcp_session, _ = next(iter(cl.context.session.mcp_sessions.values()))
-
-    try:
-        result = await mcp_session.call_tool(
-            tool_name,
-            arguments=tool_args
-        )
-
-        # 🔑 Extract actual tool payload
-        tool_output = result.content[0].text
-
-        step.output = tool_output
-
-    except Exception as e:
-        tool_output = json.dumps({"error": str(e)})
-        step.output = tool_output
-
-    messages.append({
-        "role": "tool",
-        "tool_name": tool_name,
-        "content": tool_output,
-    })
-
-
-# ---------------------------------------------------------------------
-# Simple heuristic: when tools are allowed
-# ---------------------------------------------------------------------
-
-def needs_tools(user_text: str) -> bool:
-    keywords = [
-        "list", "get", "create", "delete", "update",
-        "fetch", "describe", "show", "find"
-    ]
-    text = user_text.lower()
-    return any(word in text for word in keywords)
+    return "No response from orchestrator."
 
 
 # ---------------------------------------------------------------------
@@ -140,65 +133,14 @@ async def main(message: cl.Message):
     msg = cl.Message(content="")
     await msg.send()
 
-    tools = cl.user_session.get("ollama_tools", [])
+    try:
+        response_text = await a2a_send_message(message.content)
+    except httpx.HTTPStatusError as e:
+        response_text = f"Orchestrator returned HTTP {e.response.status_code}"
+    except httpx.ConnectError:
+        response_text = f"Could not connect to orchestrator at {ORCHESTRATOR_URL}"
+    except Exception as e:
+        response_text = f"Error communicating with orchestrator: {e}"
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": message.content},
-    ]
-
-    async with httpx.AsyncClient(timeout=None) as client:
-        while True:
-            assistant_text = ""
-            tool_called = False
-
-            payload = {
-                "model": CHAT_MODEL,
-                "messages": messages,
-                "stream": True,
-            }
-
-            if needs_tools(message.content):
-                payload["tools"] = tools
-                payload["tool_choice"] = "auto"
-
-            response = await client.post(
-                CHAT_COMPLETION_URL,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
-
-            async for line in response.aiter_lines():
-                if not line or not line.startswith("data:"):
-                    continue
-
-                data = line.removeprefix("data:").strip()
-
-                if data == "[DONE]":
-                    break
-
-                event = json.loads(data)
-                choice = event["choices"][0]
-                delta = choice.get("delta", {})
-
-                # Stream assistant text
-                if "content" in delta:
-                    token = delta["content"]
-                    assistant_text += token
-                    await msg.stream_token(token)
-
-                # Tool calls
-                if "tool_calls" in delta:
-                    tool_called = True
-                    for call in delta["tool_calls"]:
-                        await execute_tool(call, messages)
-
-            if not tool_called:
-                messages.append({
-                    "role": "assistant",
-                    "content": assistant_text,
-                })
-                break
-
+    msg.content = response_text
     await msg.update()
-
