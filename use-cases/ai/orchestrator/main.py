@@ -175,6 +175,11 @@ async def load_tools() -> list:
         logger.warning("tsh discovery failed, falling back to agents.json", error=str(e))
         return await load_tools_from_config()
 
+    # tsh succeeded but found nothing — fall back to static config
+    if not app_names:
+        logger.info("no apps discovered via tsh, falling back to agents.json")
+        return await load_tools_from_config()
+
     tools = []
     proxies = []
     for app_name in app_names:
