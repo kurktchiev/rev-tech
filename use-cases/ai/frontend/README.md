@@ -155,7 +155,15 @@ You can customize styling via:
 
 ---
 
-## 🔧 Development
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ORCHESTRATOR_URL` | `http://localhost:9000` | Primary orchestrator A2A endpoint. In K8s, this points to the tbot application-tunnel (`http://127.0.0.1:9000`). |
+| `ORCHESTRATOR_FALLBACK_URL` | *(empty)* | Optional fallback URL tried when the primary is unreachable (connection refused / timeout). Useful for local dev without tbot — set to `http://localhost:9000` so the frontend tries the tunnel first, then falls back to a direct connection. Not set in K8s. |
+| `CHAINLIT_AUTH_SECRET` | *(required)* | Secret used by Chainlit to sign sessions. Set to `None` for local dev to disable auth. In K8s, set to a real value so the Teleport JWT header callback is invoked. |
+
+## Development
 
 Run with auto-reload:
 

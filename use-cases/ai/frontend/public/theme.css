@@ -1,0 +1,6 @@
+/* Teleport brand color: #512FC9 → HSL(258, 63%, 49%) */
+/* Backup: theme.json handles this via Chainlit's native theming, */
+/* but this CSS reinforces it for any edge cases. */
+:root {
+  --primary: 258 63% 49% !important;
+}
