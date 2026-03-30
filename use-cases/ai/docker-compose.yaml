@@ -1,5 +1,44 @@
 services:
 
+  agent-demo-teleport:
+    container_name: agent-teleport-cluster
+    image: public.ecr.aws/gravitational/teleport-distroless:18
+    ports:
+      - "3022:3022"
+      - "3023:3023"
+      - "3024:3024"
+      - "3025:3025"
+      - "3026:3026"
+      - "3027:3027"
+      - "3028:3028"
+      - "3036:3036"
+      - "3080:3080"
+      - "443:3080"
+    restart: always
+    healthcheck:
+      test: ["CMD", "tctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - ./infra/teleport/persistence/etc:/etc/teleport
+      - ./infra/teleport/persistence/data:/var/lib/teleport
+
+  teleport-init:
+    image: docker:cli
+    depends_on:
+      agent-demo-teleport:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - sh
+      - -c
+      - |
+        docker exec agent-teleport-cluster tctl tokens add --type=node,db,app --ttl 5m --format=text
+        docker exec agent-teleport-cluster tctl users add admin-user --roles=editor,access --logins=root,ubuntu || true
+
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -28,6 +67,30 @@ services:
         condition: service_healthy
     restart: "no"
 
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    container_name: orchestrator
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ORCHESTRATOR_AGENTS_CONFIG=${ORCHESTRATOR_AGENTS_CONFIG:-orchestrator/agents.json}
+      - ORCHESTRATOR_DATABASES_CONFIG=${ORCHESTRATOR_DATABASES_CONFIG}
+      - ORCHESTRATOR_TSH_DISCOVERY_QUERY=${ORCHESTRATOR_TSH_DISCOVERY_QUERY}
+      - ORCHESTRATOR_TSH_DB_DISCOVERY_QUERY=${ORCHESTRATOR_TSH_DB_DISCOVERY_QUERY}
+      - ORCHESTRATOR_TUNNEL_MODE=${ORCHESTRATOR_TUNNEL_MODE}
+    depends_on:
+      ollama:
+        condition: service_healthy
+
   chainlit-frontend:
     build:
       context: .
@@ -37,11 +100,10 @@ services:
     ports:
       - "${CHAINLIT_PORT}:8000"
     environment:
-      - CHAINLIT_CHAT_COMPLETION_URL=${CHAINLIT_CHAT_COMPLETION_URL}
-      - CHAINLIT_CHAT_MODEL=${CHAINLIT_CHAT_MODEL}
+      - ORCHESTRATOR_URL=${ORCHESTRATOR_URL}
     depends_on:
-      ollama:
-        condition: service_healthy
+      orchestrator:
+        condition: service_started
     volumes:
       - ./frontend//.chainlit:/app/.chainlit
       - ./frontend/public:/app/public

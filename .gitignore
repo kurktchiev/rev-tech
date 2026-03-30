@@ -6,3 +6,8 @@ node_modules/
 dist/
 build/
 *.DS_Store
+
+
+# use-cases/ai
+use-cases/ai/frontend/.chainlit/translations/
+use-cases/ai/infra/teleport/persistence/data/

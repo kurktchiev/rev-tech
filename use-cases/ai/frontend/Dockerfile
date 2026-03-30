@@ -21,5 +21,4 @@ EXPOSE 8000
 
 # Set via env var at runtime; "None" disables auth (local dev only)
 # ENV CHAINLIT_AUTH_SECRET=None
-
-CMD ["chainlit", "run", "frontend/main.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "export CHAINLIT_AUTH_SECRET=None && uv run --package frontend chainlit run frontend/main.py --host 0.0.0.0 --port 8000"]
